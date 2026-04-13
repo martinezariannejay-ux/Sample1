@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaceCheck - Smart Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #10b981, transparent);
+            animation: scan 2s linear infinite;
+            box-shadow: 0 0 10px #10b981;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
+        .face-overlay {
+            background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.8) 70%);
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(1.3); opacity: 0; }
+        }
+        .hidden-section { display: none; }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen overflow-x-hidden">
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full bg-gray-900/90 backdrop-blur-md border-b border-gray-800 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-fingerprint text-white text-xl"></i>
+                    </div>
+                    <span class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                        FaceCheck
+                    </span>
+                </div>
+                <div class="hidden md:flex items-center gap-6">
+                    <button onclick="showSection('dashboard')" class="nav-btn text-gray-300 hover:text-white transition font-medium">Dashboard</button>
+                    <button onclick="showSection('rooms')" class="nav-btn text-gray-300 hover:text-white transition font-medium">Group Rooms</button>
+                    <button onclick="showSection('register')" class="nav-btn text-gray-300 hover:text-white transition font-medium">Registration</button>
+                    <button onclick="showSection('attendance')" class="nav-btn px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg transition font-medium">
+                        <i class="fas fa-camera mr-2"></i>Mark Attendance
+                    </button>
+                </div>
+                <button class="md:hidden text-gray-300 hover:text-white" onclick="toggleMobileMenu()">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobileMenu" class="hidden md:hidden bg-gray-800 border-t border-gray-700">
+            <div class="px-4 pt-2 pb-4 space-y-2">
+                <button onclick="showSection('dashboard')" class="block w-full text-left px-3 py-2 text-gray-300 hover:bg-gray-700 rounded">Dashboard</button>
+                <button onclick="showSection('rooms')" class="block w-full text-left px-3 py-2 text-gray-300 hover:bg-gray-700 rounded">Group Rooms</button>
+                <button onclick="showSection('register')" class="block w-full text-left px-3 py-2 text-gray-300 hover:bg-gray-700 rounded">Registration</button>
+                <button onclick="showSection('attendance')" class="block w-full text-left px-3 py-2 text-emerald-400 hover:bg-gray-700 rounded">Mark Attendance</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-20 pb-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="fade-in">
+            <div class="mb-8">
+                <h1 class="text-4xl font-bold mb-2">Dashboard</h1>
+                <p class="text-gray-400">Real-time attendance overview and analytics</p>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-emerald-500/50 transition">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-users text-emerald-400 text-xl"></i>
+                        </div>
+                        <span class="text-emerald-400 text-sm font-medium">+12 today</span>
+                    </div>
+                    <h3 class="text-3xl font-bold" id="totalUsers">0</h3>
+                    <p class="text-gray-400 text-sm">Total Registered</p>
+                </div>
+                
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-blue-500/50 transition">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-door-open text-blue-400 text-xl"></i>
+                        </div>
+                        <span class="text-blue-400 text-sm font-medium">Active</span>
+                    </div>
+                    <h3 class="text-3xl font-bold" id="totalRooms">0</h3>
+                    <p class="text-gray-400 text-sm">Group Rooms</p>
+                </div>
+
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-purple-500/50 transition">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-check-circle text-purple-400 text-xl"></i>
+                        </div>
+                        <span class="text-purple-400 text-sm font-medium">85% avg</span>
+                    </div>
+                    <h3 class="text-3xl font-bold" id="todayAttendance">0</h3>
+                    <p class="text-gray-400 text-sm">Present Today</p>
+                </div>
+
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-orange-500/50 transition">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-clock text-orange-400 text-xl"></i>
+                        </div>
+                        <span class="text-orange-400 text-sm font-medium">Live</span>
+                    </div>
+                    <h3 class="text-3xl font-bold" id="currentTime">--:--</h3>
+                    <p class="text-gray-400 text-sm">Current Time</p>
+                </div>
+            </div>
+
+            <!-- Recent Activity & Quick Actions -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-gray-800 rounded-2xl p-6 border border-gray-700">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold">Recent Activity</h3>
+                        <button class="text-emerald-400 text-sm hover:text-emerald-300">View All</button>
+                    </div>
+                    <div class="space-y-4" id="recentActivity">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+                    <h3 class="text-xl font-bold mb-6">Quick Actions</h3>
+                    <div class="space-y-3">
+                        <button onclick="showSection('register')" class="w-full flex items-center gap-3 p-4 bg-gray-700/50 hover:bg-gray-700 rounded-xl transition group">
+                            <div class="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition">
+                                <i class="fas fa-user-plus text-emerald-400"></i>
+                            </div>
+                            <div class="text-left">
+                                <div class="font-medium">New Registration</div>
+                                <div class="text-sm text-gray-400">Add new member</div>
+                            </div>
+                        </button>
+                        <button onclick="showSection('rooms')" class="w-full flex items-center gap-3 p-4 bg-gray-700/50 hover:bg-gray-700 rounded-xl transition group">
+                            <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition">
+                                <i class="fas fa-plus text-blue-400"></i>
+                            </div>
+                            <div class="text-left">
+                                <div class="font-medium">Create Room</div>
+                                <div class="text-sm text-gray-400">New group space</div>
+                            </div>
+                        </button>
+                        <button onclick="generateReport()" class="w-full flex items-center gap-3 p-4 bg-gray-700/50 hover:bg-gray-700 rounded-xl transition group">
+                            <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition">
+                                <i class="fas fa-file-export text-purple-400"></i>
+                            </div>
+                            <div class="text-left">
+                                <div class="font-medium">Export Report</div>
+                                <div class="text-sm text-gray-400">Download CSV</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Attendance Section (Face Recognition) -->
+        <section id="attendance" class="hidden-section fade-in">
+            <div class="mb-8 text-center">
+                <h1 class="text-4xl font-bold mb-2">Face Recognition</h1>
+                <p class="text-gray-400">Position your face in the frame to mark attendance</p>
+            </div>
+
+            <div class="max-w-4xl mx-auto">
+                <!-- Room Selection -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Select Room</label>
+                    <select id="attendanceRoom" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                        <option value="">-- Select a room --</option>
+                    </select>
+                </div>
+
+                <!-- Camera Container -->
+                <div class="relative bg-gray-800 rounded-3xl overflow-hidden border-2 border-gray-700 shadow-2xl">
+                    <div class="aspect-video relative bg-black">
+                        <video id="video" class="w-full h-full object-cover" autoplay playsinline></video>
+                        <canvas id="canvas" class="hidden"></canvas>
+                        
+                        <!-- Face Detection Overlay -->
+                        <div class="absolute inset-0 face-overlay flex items-center justify-center">
+                            <div class="relative w-64 h-64">
+                                <!-- Corner markers -->
+                                <div class="absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-emerald-400 rounded-tl-3xl"></div>
+                                <div class="absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-emerald-400 rounded-tr-3xl"></div>
+                                <div class="absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-emerald-400 rounded-bl-3xl"></div>
+                                <div class="absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-emerald-400 rounded-br-3xl"></div>
+                                
+                                <!-- Scanning animation -->
+                                <div id="scanLine" class="scan-line hidden"></div>
+                                <div id="pulseRing" class="absolute inset-0 border-2 border-emerald-400 rounded-full pulse-ring hidden"></div>
+                            </div>
+                        </div>
+
+                        <!-- Status Overlay -->
+                        <div id="cameraStatus" class="absolute inset-0 flex items-center justify-center bg-black/80">
+                            <div class="text-center">
+                                <i class="fas fa-camera text-4xl text-gray-600 mb-4"></i>
+                                <p class="text-gray-400">Camera inactive</p>
+                                <button onclick="startCamera()" class="mt-4 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-medium transition">
+                                    Start Camera
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Recognition Result -->
+                        <div id="recognitionResult" class="absolute inset-0 flex items-center justify-center bg-black/90 hidden">
+                            <div class="text-center p-8">
+                                <div id="resultIcon" class="text-6xl mb-4"></div>
+                                <h3 id="resultTitle" class="text-2xl font-bold mb-2"></h3>
+                                <p id="resultMessage" class="text-gray-400 mb-4"></p>
+                                <button onclick="resetRecognition()" class="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+                                    Scan Again
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="p-6 bg-gray-800 border-t border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <button id="captureBtn" onclick="captureAndRecognize()" disabled 
+                                    class="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold transition flex items-center gap-2">
+                                    <i class="fas fa-fingerprint"></i>
+                                    Verify Face
+                                </button>
+                                <button onclick="stopCamera()" class="px-4 py-3 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-xl transition">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                            </div>
+                            <div class="text-sm text-gray-400">
+                                <i class="fas fa-shield-alt mr-2 text-emerald-400"></i>
+                                Secure & Private
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex items-center gap-3">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-lightbulb text-blue-400"></i>
+                        </div>
+                        <div class="text-sm text-gray-300">Ensure good lighting conditions</div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex items-center gap-3">
+                        <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-eye text-purple-400"></i>
+                        </div>
+                        <div class="text-sm text-gray-300">Look directly at the camera</div>
+                    </div>
+                    <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700 flex items-center gap-3">
+                        <div class="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-user-circle text-orange-400"></i>
+                        </div>
+                        <div class="text-sm text-gray-300">Remove glasses if possible</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Registration Section -->
+        <section id="register" class="hidden-section fade-in">
+            <div class="mb-8">
+                <h1 class="text-4xl font-bold mb-2">User Registration</h1>
+                <p class="text-gray-400">Register new users with facial biometric data</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+                <!-- Registration Form -->
+                <div class="bg-gray-800 rounded-2xl p-8 border border-gray-700">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-user-plus text-emerald-400"></i>
+                        Personal Information
+                    </h3>
+                    
+                    <form id="registrationForm" onsubmit="handleRegistration(event)" class="space-y-6">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-2">First Name</label>
+                                <input type="text" id="firstName" required 
+                                    class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition"
+                                    placeholder="John">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-2">Last Name</label>
+                                <input type="text" id="lastName" required 
+                                    class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition"
+                                    placeholder="Doe">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
+                            <input type="email" id="email" required 
+                                class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition"
+                                placeholder="john.doe@example.com">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">ID Number / Roll No</label>
+                            <input type="text" id="userId" required 
+                                class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition"
+                                placeholder="EMP001 / STD2024">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Assign to Rooms</label>
+                            <div id="roomSelection" class="space-y-2 max-h-40 overflow-y-auto bg-gray-900 rounded-xl p-4 border border-gray-700">
+                                <p class="text-gray-500 text-sm italic">No rooms available. Create rooms first.</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-2">Role</label>
+                            <select id="role" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                                <option value="student">Student</option>
+                                <option value="employee">Employee</option>
+                                <option value="visitor">Visitor</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" id="submitRegBtn" disabled
+                            class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-semibold text-lg transition flex items-center justify-center gap-2">
+                            <i class="fas fa-save"></i>
+                            Complete Registration
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Face Capture -->
+                <div class="bg-gray-800 rounded-2xl p-8 border border-gray-700">
+                    <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-camera text-blue-400"></i>
+                        Face Capture
+                    </h3>
+
+                    <div class="relative bg-gray-900 rounded-2xl overflow-hidden border border-gray-700 mb-4">
+                        <div class="aspect-square relative">
+                            <video id="registerVideo" class="w-full h-full object-cover" autoplay playsinline></video>
+                            <canvas id="registerCanvas" class="hidden"></canvas>
+                            
+                            <div class="absolute inset-0 flex items-center justify-center" id="registerCameraStatus">
+                                <button onclick="startRegisterCamera()" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-xl font-medium transition">
+                                    <i class="fas fa-camera mr-2"></i>Start Camera
+                                </button>
+                            </div>
+
+                            <div id="capturePreview" class="absolute inset-0 hidden">
+                                <img id="previewImg" class="w-full h-full object-cover">
+                                <div class="absolute bottom-4 left-4 right-4 flex gap-2">
+                                    <button onclick="retakePhoto()" class="flex-1 py-2 bg-red-500/80 hover:bg-red-500 rounded-lg transition">
+                                        <i class="fas fa-redo mr-2"></i>Retake
+                                    </button>
+                                    <button onclick="confirmPhoto()" class="flex-1 py-2 bg-emerald-500/80 hover:bg-emerald-500 rounded-lg transition">
+                                        <i class="fas fa-check mr-2"></i>Confirm
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button onclick="capturePhoto()" id="capturePhotoBtn" disabled
+                            class="flex-1 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-medium transition">
+                            <i class="fas fa-camera mr-2"></i>Capture
+                        </button>
+                    </div>
+
+                    <div class="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-info-circle text-blue-400 mt-1"></i>
+                            <div class="text-sm text-gray-300">
+                                <p class="font-medium text-blue-400 mb-1">Capture Guidelines:</p>
+                                <ul class="list-disc list-inside space-y-1 text-gray-400">
+                                    <li>Face the camera directly</li>
+                                    <li>Ensure neutral expression</li>
+                                    <li>Remove masks or sunglasses</li>
+                                    <li>Plain background preferred</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Group Rooms Section -->
+        <section id="rooms" class="hidden-section fade-in">
+            <div class="mb-8 flex items-end justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold mb-2">Group Rooms</h1>
+                    <p class="text-gray-400">Manage departments, classes, and teams</p>
+                </div>
+                <button onclick="openRoomModal()" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-medium transition flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    Create Room
+                </button>
+            </div>
+
+            <!-- Rooms Grid -->
+            <div id="roomsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Dynamic content -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyRooms" class="hidden text-center py-20">
+                <div class="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-door-open text-4xl text-gray-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-400 mb-2">No Rooms Yet</h3>
+                <p class="text-gray-500 mb-6">Create your first group room to get started</p>
+                <button onclick="openRoomModal()" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-medium transition">
+                    Create Room
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Create Room Modal -->
+    <div id="roomModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-2xl max-w-md w-full border border-gray-700 shadow-2xl transform transition-all scale-100">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <h3 class="text-xl font-bold">Create New Room</h3>
+                <button onclick="closeRoomModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form onsubmit="handleCreateRoom(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Room Name</label>
+                    <input type="text" id="roomName" required 
+                        class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500"
+                        placeholder="e.g., Computer Science Dept">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                    <textarea id="roomDesc" rows="3" 
+                        class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500"
+                        placeholder="Brief description..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Room Type</label>
+                    <select id="roomType" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                        <option value="department">Department</option>
+                        <option value="class">Class/Classroom</option>
+                        <option value="team">Team</option>
+                        <option value="event">Event/Meeting</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeRoomModal()" class="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl transition">Cancel</button>
+                    <button type="submit" class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-medium transition">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl px-6 py-4 shadow-2xl flex items-center gap-3">
+            <div id="toastIcon" class="text-emerald-400 text-xl"></div>
+            <div>
+                <div id="toastTitle" class="font-semibold"></div>
+                <div id="toastMessage" class="text-sm text-gray-400"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let users = JSON.parse(localStorage.getItem('facecheck_users')) || [];
+        let rooms = JSON.parse(localStorage.getItem('facecheck_rooms')) || [];
+        let attendance = JSON.parse(localStorage.getItem('facecheck_attendance')) || [];
+        let currentStream = null;
+        let registerStream = null;
+        let capturedPhoto = null;
+        let currentUser = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDashboard();
+            renderRooms();
+            updateRoomSelects();
+            setInterval(updateTime, 1000);
+            updateTime();
+            
+            // Demo data if empty
+            if (users.length === 0) {
+                addDemoData();
+            }
+        });
+
+        function addDemoData() {
+            rooms = [
+                { id: 1, name: 'Computer Science Dept', description: 'CS Department - 3rd Floor', type: 'department', created: new Date().toISOString() },
+                { id: 2, name: 'Marketing Team', description: 'Digital Marketing Division', type: 'team', created: new Date().toISOString() },
+                { id: 3, name: 'Conference Room A', description: 'Main conference hall', type: 'event', created: new Date().toISOString() }
+            ];
+            
+            users = [
+                { id: 'EMP001', firstName: 'Alice', lastName: 'Johnson', email: 'alice@company.com', role: 'employee', rooms: [1], faceData: 'demo1', registered: new Date().toISOString() },
+                { id: 'EMP002', firstName: 'Bob', lastName: 'Smith', email: 'bob@company.com', role: 'employee', rooms: [1, 2], faceData: 'demo2', registered: new Date().toISOString() },
+                { id: 'STD001', firstName: 'Charlie', lastName: 'Brown', email: 'charlie@university.edu', role: 'student', rooms: [1], faceData: 'demo3', registered: new Date().toISOString() }
+            ];
+            
+            saveData();
+            updateDashboard();
+            renderRooms();
+            updateRoomSelects();
+        }
+
+        function saveData() {
+            localStorage.setItem('facecheck_users', JSON.stringify(users));
+            localStorage.setItem('facecheck_rooms', JSON.stringify(rooms));
+            localStorage.setItem('facecheck_attendance', JSON.stringify(attendance));
+        }
+
+        // Navigation
+        function showSection(sectionId) {
+            document.querySelectorAll('main > section').forEach(section => {
+                section.classList.add('hidden-section');
+            });
+            document.getElementById(sectionId).classList.remove('hidden-section');
+            
+            // Close mobile menu
+            document.getElementById('mobileMenu').classList.add('hidden');
+            
+            // Update nav active state
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-emerald-400');
+            });
+            
+            if (sectionId === 'dashboard') updateDashboard();
+            if (sectionId === 'rooms') renderRooms();
+            if (sectionId === 'attendance') updateRoomSelects();
+        }
+
+        function toggleMobileMenu() {
+            document.getElementById('mobileMenu').classList.toggle('hidden');
+        }
+
+        // Dashboard Functions
+        function updateDashboard() {
+            document.getElementById('totalUsers').textContent = users.length;
+            document.getElementById('totalRooms').textContent = rooms.length;
+            
+            const today = new Date().toDateString();
+            const todayCount = attendance.filter(a => new Date(a.timestamp).toDateString() === today).length;
+            document.getElementById('todayAttendance').textContent = todayCount;
+            
+            updateRecentActivity();
+        }
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', minute: '2-digit' 
+            });
+        }
+
+        function updateRecentActivity() {
+            const container = document.getElementById('recentActivity');
+            const recent = attendance.slice(-5).reverse();
+            
+            if (recent.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-4">No recent activity</p>';
+                return;
+            }
+            
+            container.innerHTML = recent.map(record => {
+                const user = users.find(u => u.id === record.userId) || { firstName: 'Unknown', lastName: 'User' };
+                const room = rooms.find(r => r.id === parseInt(record.roomId)) || { name: 'Unknown Room' };
+                const time = new Date(record.timestamp).toLocaleTimeString();
+                
+                return `
+                    <div class="flex items-center gap-4 p-3 bg-gray-700/30 rounded-xl hover:bg-gray-700/50 transition">
+                        <div class="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-user-check text-emerald-400"></i>
+                        </div>
+                        <div class="flex-1">
+                            <div class="font-medium">${user.firstName} ${user.lastName}</div>
+                            <div class="text-sm text-gray-400">${room.name} • ${time}</div>
+                        </div>
+                        <div class="text-emerald-400 text-sm font-medium">Present</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Camera Functions
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user', width: 1280, height: 720 } 
+                });
+                currentStream = stream;
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                document.getElementById('cameraStatus').classList.add('hidden');
+                document.getElementById('captureBtn').disabled = false;
+                document.getElementById('scanLine').classList.remove('hidden');
+                document.getElementById('pulseRing').classList.remove('hidden');
+                
+                showToast('success', 'Camera Active', 'Position your face in the frame');
+            } catch (err) {
+                showToast('error', 'Camera Error', 'Unable to access camera. Please check permissions.');
+            }
+        }
+
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            document.getElementById('video').srcObject = null;
+            document.getElementById('cameraStatus').classList.remove('hidden');
+            document.getElementById('captureBtn').disabled = true;
+            document.getElementById('scanLine').classList.add('hidden');
+            document.getElementById('pulseRing').classList.add('hidden');
+        }
+
+        async function startRegisterCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user', width: 1280, height: 720 } 
+                });
+                registerStream = stream;
+                const video = document.getElementById('registerVideo');
+                video.srcObject = stream;
+                document.getElementById('registerCameraStatus').classList.add('hidden');
+                document.getElementById('capturePhotoBtn').disabled = false;
+            } catch (err) {
+                showToast('error', 'Camera Error', 'Unable to access camera');
+            }
+        }
+
+        function stopRegisterCamera() {
+            if (registerStream) {
+                registerStream.getTracks().forEach(track => track.stop());
+                registerStream = null;
+            }
+        }
+
+        // Face Recognition Simulation
+        function captureAndRecognize() {
+            const roomId = document.getElementById('attendanceRoom').value;
+            if (!roomId) {
+                showToast('error', 'Select Room', 'Please select a room first');
+                return;
+            }
+
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Simulate processing
+            document.getElementById('scanLine').style.animationDuration = '0.5s';
+            document.getElementById('captureBtn').disabled = true;
+            document.getElementById('captureBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            
+            setTimeout(() => {
+                // Simulate recognition (randomly pick a user for demo, or fail if no users)
+                if (users.length === 0) {
+                    showRecognitionResult(false, 'No Users', 'No registered users found in system');
+                    return;
+                }
+                
+                // 80% success rate simulation
+                const success = Math.random() > 0.2;
+                if (success) {
+                    const randomUser = users[Math.floor(Math.random() * users.length)];
+                    markAttendance(randomUser.id, roomId);
+                    showRecognitionResult(true, randomUser.firstName + ' ' + randomUser.lastName, 'Attendance marked successfully');
+                } else {
+                    showRecognitionResult(false, 'Not Recognized', 'Face not found in database. Please register first.');
+                }
+                
+                document.getElementById('scanLine').style.animationDuration = '2s';
+                document.getElementById('captureBtn').disabled = false;
+                document.getElementById('captureBtn').innerHTML = '<i class="fas fa-fingerprint"></i> Verify Face';
+            }, 2000);
+        }
+
+        function showRecognitionResult(success, title, message) {
+            const resultDiv = document.getElementById('recognitionResult');
+            const icon = document.getElementById('resultIcon');
+            const titleEl = document.getElementById('resultTitle');
+            const msgEl = document.getElementById('resultMessage');
+            
+            resultDiv.classList.remove('hidden');
+            
+            if (success) {
+                icon.innerHTML = '<i class="fas fa-check-circle text-emerald-400"></i>';
+                titleEl.className = 'text-2xl font-bold mb-2 text-emerald-400';
+            } else {
+                icon.innerHTML = '<i class="fas fa-times-circle text-red-400"></i>';
+                titleEl.className = 'text-2xl font-bold mb-2 text-red-400';
+            }
+            
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+        }
+
+        function resetRecognition() {
+            document.getElementById('recognitionResult').classList.add('hidden');
+        }
+
+        function markAttendance(userId, roomId) {
+            const record = {
+                userId: userId,
+                roomId: roomId,
+                timestamp: new Date().toISOString(),
+                method: 'facial_recognition'
+            };
+            attendance.push(record);
+            saveData();
+            updateDashboard();
+        }
+
+        // Registration Functions
+        function capturePhoto() {
+            const video = document.getElementById('registerVideo');
+            const canvas = document.getElementById('registerCanvas');
+            const context = canvas.getContext('2d');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            capturedPhoto = canvas.toDataURL('image/png');
+            document.getElementById('previewImg').src = capturedPhoto;
+            document.getElementById('capturePreview').classList.remove('hidden');
+            document.getElementById('capturePhotoBtn').disabled = true;
+        }
+
+        function retakePhoto() {
+            capturedPhoto = null;
+            document.getElementById('capturePreview').classList.add('hidden');
+            document.getElementById('capturePhotoBtn').disabled = false;
+        }
+
+        function confirmPhoto() {
+            document.getElementById('submitRegBtn').disabled = false;
+            showToast('success', 'Photo Captured', 'You can now complete registration');
+            stopRegisterCamera();
+        }
+
+        function handleRegistration(e) {
+            e.preventDefault();
+            
+            if (!capturedPhoto) {
+                showToast('error', 'Photo Required', 'Please capture a photo first');
+                return;
+            }
+            
+            const selectedRooms = Array.from(document.querySelectorAll('input[name="regRooms"]:checked'))
+                .map(cb => parseInt(cb.value));
+            
+            const newUser = {
+                id: document.getElementById('userId').value,
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                email: document.getElementById('email').value,
+                role: document.getElementById('role').value,
+                rooms: selectedRooms,
+                faceData: capturedPhoto,
+                registered: new Date().toISOString()
+            };
+            
+            users.push(newUser);
+            saveData();
+            
+            showToast('success', 'Registration Complete', 'User registered successfully');
+            document.getElementById('registrationForm').reset();
+            retakePhoto();
+            updateDashboard();
+            
+            setTimeout(() => showSection('dashboard'), 1500);
+        }
+
+        // Room Management
+        function openRoomModal() {
+            document.getElementById('roomModal').classList.remove('hidden');
+        }
+
+        function closeRoomModal() {
+            document.getElementById('roomModal').classList.add('hidden');
+            document.getElementById('roomName').value = '';
+            document.getElementById('roomDesc').value = '';
+        }
+
+        function handleCreateRoom(e) {
+            e.preventDefault();
+            
+            const newRoom = {
+                id: Date.now(),
+                name: document.getElementById('roomName').value,
+                description: document.getElementById('roomDesc').value,
+                type: document.getElementById('roomType').value,
+                created: new Date().toISOString()
+            };
+            
+            rooms.push(newRoom);
+            saveData();
+            renderRooms();
+            updateRoomSelects();
+            closeRoomModal();
+            showToast('success', 'Room Created', 'New group room has been created');
+        }
+
+        function renderRooms() {
+            const grid = document.getElementById('roomsGrid');
+            const empty = document.getElementById('emptyRooms');
+            
+            if (rooms.length === 0) {
+                grid.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            grid.innerHTML = rooms.map(room => {
+                const memberCount = users.filter(u => u.rooms.includes(room.id)).length;
+                const typeColors = {
+                    department: 'bg-blue-500/20 text-blue-400',
+                    class: 'bg-purple-500/20 text-purple-400',
+                    team: 'bg-emerald-500/20 text-emerald-400',
+                    event: 'bg-orange-500/20 text-orange-400'
+                };
+                
+                return `
+                    <div class="bg-gray-800 rounded-2xl p-6 border border-gray-700 hover:border-gray-600 transition group">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="w-12 h-12 ${typeColors[room.type] || 'bg-gray-700'} rounded-xl flex items-center justify-center">
+                                <i class="fas fa-door-open text-xl"></i>
+                            </div>
+                            <button onclick="deleteRoom(${room.id})" class="text-gray-600 hover:text-red-400 transition opacity-0 group-hover:opacity-100">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2">${room.name}</h3>
+                        <p class="text-gray-400 text-sm mb-4">${room.description || 'No description'}</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500 capitalize">${room.type}</span>
+                            <span class="text-emerald-400 font-medium">${memberCount} members</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function deleteRoom(id) {
+            if (confirm('Are you sure you want to delete this room?')) {
+                rooms = rooms.filter(r => r.id !== id);
+                users.forEach(u => {
+                    u.rooms = u.rooms.filter(rid => rid !== id);
+                });
+                saveData();
+                renderRooms();
+                updateRoomSelects();
+                showToast('success', 'Room Deleted', 'Room has been removed');
+            }
+        }
+
+        function updateRoomSelects() {
+            // Update attendance room select
+            const attSelect = document.getElementById('attendanceRoom');
+            attSelect.innerHTML = '<option value="">-- Select a room --</option>' + 
+                rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+            
+            // Update registration room checkboxes
+            const regContainer = document.getElementById('roomSelection');
+            if (rooms.length === 0) {
+                regContainer.innerHTML = '<p class="text-gray-500 text-sm italic">No rooms available. Create rooms first.</p>';
+            } else {
+                regContainer.innerHTML = rooms.map(r => `
+                    <label class="flex items-center gap-3 p-2 hover:bg-gray-800 rounded-lg cursor-pointer transition">
+                        <input type="checkbox" name="regRooms" value="${r.id}" class="w-4 h-4 rounded border-gray-600 text-emerald-500 focus:ring-emerald-500 bg-gray-800">
+                        <span class="text-sm">${r.name}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        // Utilities
+        function showToast(type, title, message) {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const titleEl = document.getElementById('toastTitle');
+            const msgEl = document.getElementById('toastMessage');
+            
+            icon.className = type === 'success' ? 'text-emerald-400 text-xl' : 'text-red-400 text-xl';
+            icon.innerHTML = type === 'success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-exclamation-circle"></i>';
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function generateReport() {
+            const csv = [
+                ['User ID', 'Name', 'Email', 'Role', 'Room', 'Date', 'Time', 'Status'].join(','),
+                ...attendance.map(a => {
+                    const user = users.find(u => u.id === a.userId) || {};
+                    const room = rooms.find(r => r.id === parseInt(a.roomId)) || {};
+                    const date = new Date(a.timestamp);
+                    return [
+                        a.userId,
+                        `${user.firstName || ''} ${user.lastName || ''}`,
+                        user.email || '',
+                        user.role || '',
+                        room.name || '',
+                        date.toLocaleDateString(),
+                        date.toLocaleTimeString(),
+                        'Present'
+                    ].join(',');
+                })
+            ].join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `attendance_report_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            
+            showToast('success', 'Report Generated', 'CSV file downloaded');
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+            stopRegisterCamera();
+        });
+    </script>
+</body>
+</html>
